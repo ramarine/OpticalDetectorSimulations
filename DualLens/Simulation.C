@@ -75,7 +75,12 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     double D = 100., d1 = w_pos;
     int ntot = 0;
     double NDecay = 100., MIP_e = 2.2e5, part_propag = 100;
+    //Muons 2.2 MeV per cm or 0.22 MeV per mm.
+    //protons 4.5 MeV per cm or 0.45 MeV per mm
+    //Alpha 5.3 MeV per cm or 0.53 MeV per mm// attention genereated with copilot AI
+    //Electron 2.0 MeV per cm or 0.20 MeV per // attention genereated with copilot AI
     if (part_propag > 100) cout << " Pay attentio, the particle propagates more than 100 mm, the length of the cube" << std::endl;
+    
     double InEnergy = MIP_e * part_propag;
     cout << " Input Energy (eV) " << InEnergy << endl;
     double pht_per_eV = 0.01, prim_pht = InEnergy * pht_per_eV;
