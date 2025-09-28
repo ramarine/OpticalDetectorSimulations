@@ -11,7 +11,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
 
     debug = false;
     TFile *graphs = new TFile("graphs.root", "UPDATE");
-    FILE *input = fopen("test.txt", "r");
+    FILE *input = fopen("lens_sensor_position_input.txt", "r");
 
     std::vector<double> lenspositions_v, sensorpositions_v;
     double col_1 = 0, col_2 = 0;
@@ -180,7 +180,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         eff_mag.push_back((double)hsensorlens->GetEntries()/(double)ntot * 1/(MPPC_QE*Acr_tr));
         lens_acc.push_back(hlens->GetEntries()/ntot);
         hpx->Fit("pol1", "", "same");
-        cout << "debug 5" << endl;
+        
         mag_store.push_back(TMath::Abs(h2ymean->GetFunction("pol1")->GetParameter(1)));
         aberr_store.push_back(aberr);
         std::cout << " The max number of photons per channel: " << bin_content / 16 / NDecay << std::endl;
