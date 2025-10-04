@@ -7,9 +7,9 @@
 #include "TProfile.h"
 #include "TCanvas.h"
 
-double Simulation(double size = 200., double lensposition = 0., double sensorpos = 0., bool debug = false) {
+double Simulation(double size = 200., double lensposition = 0., double sensorpos = 0.) {
 
-    debug = false;
+    bool debug = false;
     TFile *graphs = new TFile("graphs.root", "UPDATE");
     FILE *input = fopen("lens_sensor_position_input.txt", "r");
 
@@ -32,7 +32,12 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     Double_t dt = dt_Ar * TMath::Sqrt(10) * 1e-3, tr_size = 1.;
     Double_t dx_mean = 0, WLS_size = 200;
 
-    Disc w(w_pos, 8.3, 50., 1.458, 1);
+    Double_t silica_idx = 1.458;
+    Double_t EJ_220_idx = 1.6;//source: table 2 https://arxiv.org/pdf/2407.19465
+    Double_t cube_length = 100; //size of cube
+
+    Disc w(w_pos, 8.3, 50., silica_idx, 1);
+    Disc air(cube_length, 8.3, 50., silica_idx, 1);
     double pmt_pos = w_pos + 5;
     Disc pmt(pmt_pos, 2., 12.5, 1.458, 1);
 
@@ -55,6 +60,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     std::vector<double> PhtPerBin, eff_mag, lens_acc, mag_store, aberr_store;
     
     TH2D *h1_2d = new TH2D("h1_PEN_dist", "1. Primary photons produced forward ; X (mm); Y(mm)", 200, -65, 65, 200, -65, 65);
+    TH3D *h1_3d = new TH3D("3d_h1_PEN_dist", "1. Primary photons produced forward ; X (mm); Y(mm); Z(mm)", 200, -65, 65, 200, -65, 65, 200, -65, 65);
     TH2D *hpmt_2d = new TH2D("h_PMT_dist", " Photon distribution on the Photocathode of PMT ; X (mm); Y (mm)", 200, -30, 30, 200, -30, 30);
     TH2D *h2x = new TH2D("h2x", "  ", 100, -size-2, size+2, 100, -20, 20);
     TH2D *h2y = new TH2D("h2y", ";Position at PEN (mm);Position at MPPC (mm)", 100, -WLS_size/2., WLS_size/2., 100, -WLS_size/2./5., WLS_size/2./5.);
@@ -116,15 +122,16 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
 
       
         ntot = PhtAtThGEM;
-
+        double z = 0;
         for (size_t i = 0; i < PhtAtThGEM/2; i++) {
-            double x = r.Uniform(-50, 50);
-            double y = x + r.Uniform(-dt/2, dt/2);
-            double z = 0.;
+            double x = r.Uniform(-part_propag/2, part_propag/2);
+            double y = x;
+            z = 0;//x + 40. / (PhtAtThGEM / 2);
+
             xOnPEN.push_back(x);
             yOnPEN.push_back(y);
             h1_2d->Fill(x,y);
-            
+            h1_3d->Fill(x,y,z);
             double costheta = r.Uniform(0.,1.), phi = r.Uniform(0.,2*3.141592);
             double sintheta = TMath::Sqrt(1.-(costheta*costheta));
             double vx = sintheta*TMath::Cos(phi), vy = sintheta*TMath::Sin(phi), vz = costheta;
@@ -138,10 +145,10 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
             // if (!w.Transport(ray)) continue;
             // ray.Transport(w_pos);
             // hwindow->Fill(ray.GetX(), ray.GetY());
-            if (pmt.Transport(ray)) {
-                ray.Transport(pmt_pos);
-                if (r.Uniform() < PEN_QE) hpmt_2d->Fill(ray.GetX(), ray.GetY());
-            }
+            // if (pmt.Transport(ray)) {
+            //     ray.Transport(pmt_pos);
+            //     if (r.Uniform() < PEN_QE) hpmt_2d->Fill(ray.GetX(), ray.GetY());
+            // }
             if (!a1_store.at(pos)->Transport(ray)) continue;
             ray.Transport(a1_store.at(pos)->GetPos());
             if (!lens_store.at(pos)->Transport(ray)) continue;
@@ -212,6 +219,10 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     c_Img->cd(4); hsensornolens->Draw("colz");
     c_Img->Update();
 
+    // TCanvas *c_Img_3D = new TCanvas("c_3d", "Ima", 1200, 800);
+    // h1_3d->Draw("box");
+    // c_Img_3D->Update();
+
     double scale = 1. / (hpx->GetFunction("pol1")->GetParameter(1));
     std::cout << "\n\n";
     std::cout << " --------------For "<< NDecay<<" identical primary tracks ----------------- " << std::endl;
@@ -224,7 +235,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     std::cout << " Including the MPPC QE,  With Lense: " << (double)hsensorlens->GetEntries() << endl;
     std::cout << " ------------------------------------------------------------------- " << std::endl;
     if (hRICx->GetEntries()!=0) std::cout << "Lens Performance " << dx_mean/hRICx->GetEntries() <<"  Lens pos " << lensposition <<  " mm.  SensorPos " << sensorpos << std::endl;
-
+    if (mag_store.size() != 0) std::cout << "Magnitude " << mag_store.at(0) <<std::endl;
     std::vector<double> acc_mag_lens;
     for (size_t i = 0; i < mag_store.size(); i++) acc_mag_lens.push_back(lens_acc.at(i)*mag_store.at(i));
     TCanvas *c_LensAccMag_pos = new TCanvas("Acc_mag_pos ", "", 600, 600);
