@@ -20,8 +20,9 @@ class PlanarSurface {
   }
 
   bool Transport(Ray &ray){
-    if( z < ray.GetZ() ) return false;
-    ray.Transport(z); // Transport the ray to this location.
+    if(z < ray.GetZ() ) return false;// if ray is already downstream of plane
+    ray.Transport(z); // Transport the ray to this location
+    
     if( TR < TMath::Sqrt( ray.GetX()*ray.GetX()+ ray.GetY()*ray.GetY()) ) return false; 
 
     if( debug ) ray.Print(" Ray at the entrance of planar surface ");
@@ -33,7 +34,7 @@ class PlanarSurface {
     double sinagleout = ray.GetIdxR()*sinangle/index;
     double phi = TMath::ATan2(ray.GetVY(),ray.GetVX());
 
-    if( TMath::Abs(sinagleout) > 1. ) return false;
+    if( TMath::Abs(sinagleout) > 1. ) return false;// total internal reflection
 
     double vx = sinagleout*TMath::Cos(phi);
     double vy = sinagleout*TMath::Sin(phi);

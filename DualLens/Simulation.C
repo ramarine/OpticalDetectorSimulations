@@ -7,6 +7,10 @@
 #include "TProfile.h"
 #include "TCanvas.h"
 
+void Debug(int i=0){
+    std::cout << " DEBUG DEBUG DEBUG " << i << std::endl;
+}
+
 double Simulation(double size = 200., double lensposition = 0., double sensorpos = 0.) {
 
     bool debug = false;
@@ -35,9 +39,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     Double_t silica_idx = 1.458;
     Double_t EJ_220_idx = 1.6;//source: table 2 https://arxiv.org/pdf/2407.19465
     Double_t cube_length = 100; //size of cube
-
-    Disc w(w_pos, 8.3, 50., silica_idx, 1);
-    Disc air(cube_length, 8.3, 50., silica_idx, 1);
+    Disc ScCube(cube_length/2, cube_length, 50., EJ_220_idx, 1);//double posz0, double width0, double TR0,  double indexrefraction0, int id = 0 
     double pmt_pos = w_pos + 5;
     Disc pmt(pmt_pos, 2., 12.5, 1.458, 1);
 
@@ -53,7 +55,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         lens_store_2.at(i)->SetDebug(debug);
         a1_store.at(i)->SetDebug(debug);
     }
-    w.SetDebug(debug);
+   
 
     TRandom r;
     std::vector<Double_t> xOnPEN, yOnPEN;
@@ -69,8 +71,8 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     TH2D *hsensornolens = new TH2D("hsensornolens", "4. Photons detected by MPPC without lens ", 16, -8., 8., 16, -8., 8.);
     TH2D *hsensorlens = new TH2D("hsensorlens", "3. Photons detected by MPPC; X position on MPPC (mm); Y position on MPPC (mm) ", 16, -8., 8., 16, -8., 8.);
     TH2D *hlens = new TH2D("hlens", "2. Photons distribution on the first lens; X Position on lens (mm); Y Position on lens (mm) ", 100, -lens_ApRad-10, lens_ApRad+10, 100, -lens_ApRad-10, lens_ApRad+10);
-    TH2D *hwindow = new TH2D("hwindow", "  ", 100, -50., 50., 100, -50., 50.);
-    TH2D *hwindow2 = new TH2D("hwindow2", "  ", 100, -50., 50., 100, -50., 50.);
+    TH2D *hScExit = new TH2D("hScExit", " Photons exiting the scintillator ", 100, -50., 50., 100, -50., 50.);
+    TH2D *hScExit2 = new TH2D("hScExit2", "  ", 100, -50., 50., 100, -50., 50.);
     TH1D *haberr = new TH1D("haberr", "", 1000, 0., size/10.);
     TH1D *htest = new TH1D("htest", "", 1000, -8, 8);
     TH3D *hdxr = new TH3D("hdxr", "", 100, 0., 25., 100, -size, size, 100, -size/5., size/5.);
@@ -80,7 +82,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
 
     double D = 100., d1 = w_pos;
     int ntot = 0;
-    double NDecay = 100., MIP_e = 2.2e5, part_propag = 100;
+    double NDecay = 100., MIP_e = 4.5e5, part_propag = 50;
     //Muons 2.2 MeV per cm or 0.22 MeV per mm.
     //protons 4.5 MeV per cm or 0.45 MeV per mm
     //Alpha 5.3 MeV per cm or 0.53 MeV per mm// attention genereated with copilot AI
@@ -107,7 +109,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         hsensorlens->Reset("ICESM");
         h1_2d->Reset("ICESM");
         hsensornolens->Reset("ICESM");
-        hwindow2->Reset("ICESM");
+        hScExit2->Reset("ICESM");
         hlens->Reset("ICESM");
         hdxr->Reset("ICESM");
         h2y->Reset("ICESM");
@@ -115,7 +117,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         hpx->Reset("ICESM");
         h2x->Reset("ICESM");
         photAtLens = 0;
-        hwindow->Reset("ICESM");
+        hScExit->Reset("ICESM");
         hRICy->Reset("ICESM");
         hRICx->Reset("ICESM");
         dx_mean = 0;
@@ -124,9 +126,9 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         ntot = PhtAtThGEM;
         double z = 0;
         for (size_t i = 0; i < PhtAtThGEM/2; i++) {
-            double x = r.Uniform(-part_propag/2, part_propag/2);
-            double y = x;
-            z = 0;//x + 40. / (PhtAtThGEM / 2);
+            double x = 0;
+            double y = r.Uniform(-part_propag/2, part_propag/2);
+            z =50.;//x + 40. / (PhtAtThGEM / 2);
 
             xOnPEN.push_back(x);
             yOnPEN.push_back(y);
@@ -139,18 +141,22 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
             Ray ray(x, y, z, vx, vy, vz, 1.);
             double thx = vx/vz, thy = vy/vz;
 
-            if (TMath::Sqrt((x+thx*d1)*(x+thx*d1)+(y+thy*d1)*(y+thy*d1)) < D/2.) hwindow2->Fill(x+thx*d1,y+thy*d1);
+            if (TMath::Sqrt((x+thx*d1)*(x+thx*d1)+(y+thy*d1)*(y+thy*d1)) < D/2.) hScExit2->Fill(x+thx*d1,y+thy*d1);
             if (TMath::Abs(x+thx*sensorpos)<8. &&  TMath::Abs(y+thy*sensorpos)<8.) hsensornolens->Fill(x+thx*sensorpos,y+thy*sensorpos);
             if (TMath::Sqrt(pow(x+thx*(lensposition+(lens_th/2)),2) + pow(y+thy*(lensposition+(lens_th/2)),2)) < lens_ApRad) photAtLens++;
+
+            if (!ScCube.Transport(ray)) continue;
+            hScExit->Fill(ray.GetX(), ray.GetY());
+            
             // if (!w.Transport(ray)) continue;
             // ray.Transport(w_pos);
-            // hwindow->Fill(ray.GetX(), ray.GetY());
+            // 
             // if (pmt.Transport(ray)) {
             //     ray.Transport(pmt_pos);
             //     if (r.Uniform() < PEN_QE) hpmt_2d->Fill(ray.GetX(), ray.GetY());
             // }
+            
             if (!a1_store.at(pos)->Transport(ray)) continue;
-            ray.Transport(a1_store.at(pos)->GetPos());
             if (!lens_store.at(pos)->Transport(ray)) continue;
             hlens->Fill(ray.GetX(), ray.GetY());
             double Ratlens = TMath::Sqrt(ray.GetX()*ray.GetX()+ray.GetY()*ray.GetY());
@@ -177,7 +183,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
                 hpy->Fill(y, ray.GetY());
             }
         }
-
+        
         double bin_content = 0;
         for (int i = 6; i < 12; i++) bin_content += hsensorlens->GetBinContent(i, i);
         h2x->FitSlicesX(); h2y->FitSlicesX();
@@ -186,19 +192,26 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         h2xmean->Fit("pol1", "", "", -7., 7.);
         h2ymean->Fit("pol1", "", "", -7., 7.);
         double aberr = 0.01;
-        cout << "PAY ATTENTION I HAVE MUTILATED THE aberr TO 0.1 " << endl;
+        
         
         PhtPerBin.push_back(bin_content / 6 / NDecay);
         eff_mag.push_back((double)hsensorlens->GetEntries()/(double)ntot * 1/(MPPC_QE*Acr_tr));
         lens_acc.push_back(hlens->GetEntries()/ntot);
         hpx->Fit("pol1", "", "same");
-        
-        mag_store.push_back(TMath::Abs(h2ymean->GetFunction("pol1")->GetParameter(1)));
+        Debug(0);
+        // mag_store.push_back(TMath::Abs(h2ymean->GetFunction("pol1")->GetParameter(1)));
+        if (h2ymean->GetFunction("pol1") != nullptr) {
+            mag_store.push_back(TMath::Abs(h2ymean->GetFunction("pol1")->GetParameter(1)));
+        } else {
+            mag_store.push_back(-99);
+        }
+        Debug(1);
         aberr_store.push_back(aberr);
         std::cout << " The max number of photons per channel: " << bin_content / 16 / NDecay << std::endl;
         std::cout << " eff * mag " << ((double)hsensorlens->GetEntries()/(double)ntot) * 1/(MPPC_QE*Acr_tr) << " lensposition " << lensposition <<std::endl;
         std::cout << " Photons reaching the lens " << hlens->GetEntries() << " ratio " << hlens->GetEntries()/ntot << " lens/pen "  << hlens->GetEntries()/xOnPEN.size() << std::endl;
     }
+
     
     TCanvas *c = new TCanvas("c", "Overview", 1200, 800);
     c->Divide(2, 3);
@@ -219,11 +232,18 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     c_Img->cd(4); hsensornolens->Draw("colz");
     c_Img->Update();
 
-    // TCanvas *c_Img_3D = new TCanvas("c_3d", "Ima", 1200, 800);
+    TCanvas *c_Img_3D = new TCanvas("c_3d", "Ima", 1200, 800);
     // h1_3d->Draw("box");
+    hScExit->Draw("colz");
     // c_Img_3D->Update();
 
-    double scale = 1. / (hpx->GetFunction("pol1")->GetParameter(1));
+    double scale = 1.;
+    if (hpx->GetFunction("pol1") != nullptr) {scale = 1. / (hpx->GetFunction("pol1")->GetParameter(1));}
+    else {
+        scale = 1.;
+        cout << "Be careful the results are not trustworthy!" << endl;
+    }
+    
     std::cout << "\n\n";
     std::cout << " --------------For "<< NDecay<<" identical primary tracks ----------------- " << std::endl;
     std::cout << " Total photons generated in the scintillator (along the track) " << ntot << endl;

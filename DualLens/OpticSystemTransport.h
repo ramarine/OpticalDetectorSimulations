@@ -52,10 +52,12 @@ class Disc: public Element {
   bool Transport( Ray &ray ){
 
     double outsideindexrefraction = ray.GetIdxR();
-
-    if( ! inputsurface->Transport(ray) ) return false;
-
-    if( ! inputsurface->Refraction(ray,indexrefraction) ) return false;
+    if (ray.GetZ() < posz - width/2.){
+      if( ! inputsurface->Transport(ray) ) return false;
+      if( ! inputsurface->Refraction(ray,indexrefraction) ) return false;
+    } else {
+      ray.SetIdxR(indexrefraction);
+    }
 
     if( ! outputsurface->Transport(ray) ) return false;
 
