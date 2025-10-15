@@ -37,9 +37,13 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     Double_t dx_mean = 0, WLS_size = 200;
 
     Double_t silica_idx = 1.458;
-    Double_t EJ_220_idx = 1.6;//source: table 2 https://arxiv.org/pdf/2407.19465
-    Double_t cube_length = 100; //size of cube
-    Disc ScCube(cube_length/2, cube_length, 50., EJ_220_idx, 1);//double posz0, double width0, double TR0,  double indexrefraction0, int id = 0 
+    Double_t EJ_220_idx = 1.58;//source: table 2 https://arxiv.org/pdf/2407.19465
+    Double_t cube_side = 100; //size of cube
+    Double_t cube_th = cube_side;
+    Double_t cube_z = 50;
+    Cube ScCube(cube_z, cube_th, cube_side/2., EJ_220_idx, 1);//double posz0, double width0, double TR0,  double indexrefraction0, int id = 0
+    // Disc ScCube(cube_z, cube_th, cube_side/2., EJ_220_idx, 1);//double posz0, double width0, double TR0,  double indexrefraction0, int id = 0 
+    PlaneConvexLens PlConvLens(130.1,10, 0.1,100,1.515,5);//double posz0, double width0, double R0, double TR0,  double indexrefraction0, int id = 0 
     double pmt_pos = w_pos + 5;
     Disc pmt(pmt_pos, 2., 12.5, 1.458, 1);
 
@@ -48,7 +52,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     for (size_t i = 0; i < lenspositions_v.size(); i++) {
         lens_store.push_back(new Lens(lenspositions_v.at(i), lens_th_30, lens_Surf_R1, lens_ApRad, 1.833, 3));
         lens_store_2.push_back(new Lens(lenspositions_v.at(i) + d_1_2, lens_th_30, lens_Surf_R1, lens_ApRad, 1.833, 3));
-        a1_store.push_back(new Aperture(lenspositions_v.at(i) - lens_th_30/2 - 3, 1., 14., 2));
+        a1_store.push_back(new Aperture(lenspositions_v.at(i) - lens_th_30/2 - 3, 1., 15., 2));
     }
     for (size_t i = 0; i < lens_store.size(); i++) {
         lens_store.at(i)->SetDebug(debug);
@@ -57,7 +61,8 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     }
    
 
-    TRandom r;
+    
+
     std::vector<Double_t> xOnPEN, yOnPEN;
     std::vector<double> PhtPerBin, eff_mag, lens_acc, mag_store, aberr_store;
     
@@ -71,18 +76,19 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     TH2D *hsensornolens = new TH2D("hsensornolens", "4. Photons detected by MPPC without lens ", 16, -8., 8., 16, -8., 8.);
     TH2D *hsensorlens = new TH2D("hsensorlens", "3. Photons detected by MPPC; X position on MPPC (mm); Y position on MPPC (mm) ", 16, -8., 8., 16, -8., 8.);
     TH2D *hlens = new TH2D("hlens", "2. Photons distribution on the first lens; X Position on lens (mm); Y Position on lens (mm) ", 100, -lens_ApRad-10, lens_ApRad+10, 100, -lens_ApRad-10, lens_ApRad+10);
-    TH2D *hScExit = new TH2D("hScExit", " Photons exiting the scintillator ", 100, -50., 50., 100, -50., 50.);
+    TH2D *hScExit = new TH2D("hScExit", " Photons exiting the scintillator; X (mm); Y (mm) ", 100, -50., 50., 100, -50., 50.);
     TH2D *hScExit2 = new TH2D("hScExit2", "  ", 100, -50., 50., 100, -50., 50.);
     TH1D *haberr = new TH1D("haberr", "", 1000, 0., size/10.);
     TH1D *htest = new TH1D("htest", "", 1000, -8, 8);
     TH3D *hdxr = new TH3D("hdxr", "", 100, 0., 25., 100, -size, size, 100, -size/5., size/5.);
     TH3D *testspherical = new TH3D("testspherical", "", 100, -1., 1., 100, -1., 1., 100, -1., 1.);
+    TH2D *test2ddist = new TH2D("htest2ddist", ";costheta; phy ", 100, 0, 1, 100, 0, 2*3.14);
     TH2D *hRICy = new TH2D("hRICy", ";Fractional Pupil Coordonate (at lens); Displacement at lens (mm) ", 100, -1.1, 1.1, 100, -5, 5);
     TH2D *hRICx = new TH2D("hRICx", ";Fractional Pupil Coordonate (at lens); Displacement at lens (mm)", 100, -1.1, 1.1, 100, -5, 5);
 
     double D = 100., d1 = w_pos;
     int ntot = 0;
-    double NDecay = 100., MIP_e = 4.5e5, part_propag = 50;
+    double NDecay = 100., MIP_e = 4.5e5, part_propag = 50.;
     //Muons 2.2 MeV per cm or 0.22 MeV per mm.
     //protons 4.5 MeV per cm or 0.45 MeV per mm
     //Alpha 5.3 MeV per cm or 0.53 MeV per mm// attention genereated with copilot AI
@@ -121,42 +127,46 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         hRICy->Reset("ICESM");
         hRICx->Reset("ICESM");
         dx_mean = 0;
-
       
         ntot = PhtAtThGEM;
-        double z = 0;
-        for (size_t i = 0; i < PhtAtThGEM/2; i++) {
-            double x = 0;
-            double y = r.Uniform(-part_propag/2, part_propag/2);
-            z =50.;//x + 40. / (PhtAtThGEM / 2);
-
+        double z = 50;
+        TRandom r;
+        TRandom r2;
+        // PhtAtThGEM = 100000;
+        double forward_photons = ntot/2.;
+        // forward_photons =1000;
+        double posns = 100;
+        for (size_t i = 0; i < forward_photons; i++) {
+            
+            double x = r2.Uniform(-50, -0+part_propag);
+            double y = 0;//r2.Uniform(-5.,5.);//0;
+            z = 50.;
+            
             xOnPEN.push_back(x);
             yOnPEN.push_back(y);
             h1_2d->Fill(x,y);
             h1_3d->Fill(x,y,z);
-            double costheta = r.Uniform(0.,1.), phi = r.Uniform(0.,2*3.141592);
+            
+            double costheta = r2.Uniform(0.,1.);
+            double phi = r2.Uniform(0,2*3.141592);
             double sintheta = TMath::Sqrt(1.-(costheta*costheta));
+            
             double vx = sintheta*TMath::Cos(phi), vy = sintheta*TMath::Sin(phi), vz = costheta;
-            // testspherical->Fill(vx, vy, vz);
+            testspherical->Fill(vx, vy, vz);
+            test2ddist->Fill(costheta,phi);
             Ray ray(x, y, z, vx, vy, vz, 1.);
             double thx = vx/vz, thy = vy/vz;
+        
+            d1=100.;
 
-            if (TMath::Sqrt((x+thx*d1)*(x+thx*d1)+(y+thy*d1)*(y+thy*d1)) < D/2.) hScExit2->Fill(x+thx*d1,y+thy*d1);
+            if (TMath::Abs(x+thx*d1) < 50. && TMath::Abs(y+thy*d1) < 50.) hScExit2->Fill(x+thx*d1,y+thy*d1);
             if (TMath::Abs(x+thx*sensorpos)<8. &&  TMath::Abs(y+thy*sensorpos)<8.) hsensornolens->Fill(x+thx*sensorpos,y+thy*sensorpos);
             if (TMath::Sqrt(pow(x+thx*(lensposition+(lens_th/2)),2) + pow(y+thy*(lensposition+(lens_th/2)),2)) < lens_ApRad) photAtLens++;
 
             if (!ScCube.Transport(ray)) continue;
+
             hScExit->Fill(ray.GetX(), ray.GetY());
-            
-            // if (!w.Transport(ray)) continue;
-            // ray.Transport(w_pos);
-            // 
-            // if (pmt.Transport(ray)) {
-            //     ray.Transport(pmt_pos);
-            //     if (r.Uniform() < PEN_QE) hpmt_2d->Fill(ray.GetX(), ray.GetY());
-            // }
-            
-            if (!a1_store.at(pos)->Transport(ray)) continue;
+           
             if (!lens_store.at(pos)->Transport(ray)) continue;
             hlens->Fill(ray.GetX(), ray.GetY());
             double Ratlens = TMath::Sqrt(ray.GetX()*ray.GetX()+ray.GetY()*ray.GetY());
@@ -217,25 +227,48 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     c->Divide(2, 3);
     c->cd(1); h2x->Draw("colz"); hpx->Fit("pol1", "", "same"); for(int i=0; i<100; i++ ) haberr->Fill(hpy->GetBinError(i+1));
     c->cd(2); h2y->Draw("colz"); for(int i=0; i<100; i++ ) haberr->Fill(hpy->GetBinError(i+1));
-    c->cd(3); hsensorlens->Scale(1/NDecay); hsensorlens->Draw("colz");
+    c->cd(3); hScExit->Scale(1/NDecay); hScExit->Draw("colz"); 
     c->cd(4); hsensornolens->Scale(1/NDecay); hsensornolens->Draw("colz");
     c->cd(5); hlens->Scale(1/NDecay); hlens->Scale(1/NDecay); hlens->Draw("colz");
     c->cd(6); hdxr->Draw("box");
     c->Update();
 
+    TBox* box = new TBox(-50, -50, 50, 50);
+    box->SetFillStyle(0);  
+    box->SetLineColor(kBlack);  // Outline color, e.g. black
+    box->SetLineWidth(1);  // Optional: make outline thicker 
 
     TCanvas *c_Img = new TCanvas("c_img", "Images", 1200, 800);
     c_Img->Divide(2, 2);
     c_Img->cd(1); h1_2d->Draw("colz");
-    c_Img->cd(2); hlens->Draw("colz");
-    c_Img->cd(3); hsensorlens->Draw("colz");
-    c_Img->cd(4); hsensornolens->Draw("colz");
+    box->Draw("same");
+    c_Img->cd(2); hlens->Scale(1/NDecay); hlens->Draw("colz"); 
+    c_Img->cd(3); hsensorlens->Scale(1/NDecay); hsensorlens->Draw("colz");
+    c_Img->cd(4); hsensornolens->Scale(1/NDecay); hsensornolens->Draw("colz");
     c_Img->Update();
 
     TCanvas *c_Img_3D = new TCanvas("c_3d", "Ima", 1200, 800);
-    // h1_3d->Draw("box");
-    hScExit->Draw("colz");
+    h1_3d->Draw("box");
+
+    TCanvas *c_testspherical_2D = new TCanvas("c_testespherical_2D", "Ima", 1200, 800);
+    test2ddist->Draw("colz");
+
+    TCanvas *c_testspherical_3D = new TCanvas("c_testespherical", "Ima", 1200, 800);
+    testspherical->Draw("boxz");
+
+    
     // c_Img_3D->Update();
+    TH1D* hScExit2_X = hScExit2->ProjectionX("hScExit2_X");
+    TCanvas *c_hScExit2 = new TCanvas("c_hScExit_2", "Photons at the edge of cube", 600, 1200);
+    c_hScExit2->Divide(1,2);
+    c_hScExit2->cd(1);
+    hScExit2->Draw("colz");
+    c_hScExit2->cd(2);
+    hScExit2_X->Draw();
+
+    TCanvas *c_hScExit = new TCanvas("c_hScExit", "Photons at the edge of cube", 600, 600);
+    hScExit->Draw("colz");
+
 
     double scale = 1.;
     if (hpx->GetFunction("pol1") != nullptr) {scale = 1. / (hpx->GetFunction("pol1")->GetParameter(1));}
@@ -256,12 +289,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     std::cout << " ------------------------------------------------------------------- " << std::endl;
     if (hRICx->GetEntries()!=0) std::cout << "Lens Performance " << dx_mean/hRICx->GetEntries() <<"  Lens pos " << lensposition <<  " mm.  SensorPos " << sensorpos << std::endl;
     if (mag_store.size() != 0) std::cout << "Magnitude " << mag_store.at(0) <<std::endl;
-    std::vector<double> acc_mag_lens;
-    for (size_t i = 0; i < mag_store.size(); i++) acc_mag_lens.push_back(lens_acc.at(i)*mag_store.at(i));
-    TCanvas *c_LensAccMag_pos = new TCanvas("Acc_mag_pos ", "", 600, 600);
-    double f = lens_store.at(0)->GetFocalLength(), f2 = lens_store_2.at(0)->GetFocalLength();
-    double lens_th_2 = 0, lens_ApRad_2 = 0;
-    for (size_t i = 0; i < lens_store.size(); i++) { delete lens_store.at(i); }
+
     return 0;
 
 }

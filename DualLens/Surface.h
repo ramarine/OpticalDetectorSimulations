@@ -7,6 +7,49 @@
 #ifndef __SURFACE__
 #define __SURFACE__
 
+class PlanarSquareSurface {
+  private:
+   double z;
+   double half_side;  // this is the side of the square. for exp 8 would be -4 to 4. 
+   bool debug;
+ 
+  public:
+   PlanarSquareSurface(double z0, double half_side0) {// surface centred at 0
+     z = z0;
+     half_side = half_side0;
+   }
+ 
+   bool Transport(Ray &ray){
+     if(z < ray.GetZ() ) return false;// if ray is already downstream of plane
+     ray.Transport(z); // Transport the ray to this location
+     
+     if (TMath::Abs(ray.GetX()) > half_side || TMath::Abs(ray.GetY()) > half_side) return false; 
+    //  if (40 < ray.GetX() && ray.GetX() < 50 ) cout<< "ASDASDASDASDAS" << endl;
+     if( debug ) ray.Print(" Ray at the entrance of planar surface ");
+     return true;
+   }
+ 
+   bool Refraction(Ray &ray,double index){
+     double sinangle = TMath::Sqrt(1.-ray.GetVZ()*ray.GetVZ());//sin theta in
+     double sinagleout = ray.GetIdxR()*sinangle/index;
+     double phi = TMath::ATan2(ray.GetVY(),ray.GetVX());
+     if( TMath::Abs(sinagleout) > 1. ) return false;// total internal reflection
+     double vx = sinagleout*TMath::Cos(phi);
+     double vy = sinagleout*TMath::Sin(phi);
+     double vz = TMath::Sqrt(1.-sinagleout*sinagleout);
+ 
+     ray.SetDir(vx,vy,vz);
+ 
+     ray.SetIdxR(index);
+ 
+     if( debug ) ray.Print(" Ray at the exit of planar surface ");
+ 
+     return true;
+   }
+ 
+   void SetDebug(bool a) { debug = a;}
+ };
+
 class PlanarSurface {
  private:
   double z;
