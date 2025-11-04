@@ -7,22 +7,116 @@
 #include "TProfile.h"
 #include "TCanvas.h"
 
+
+static double braggFunc(double* xx, double* pp) {
+    const double x = xx[0];             // depth [cm]
+    const double A = pp[0];             // amplitude
+    const double R = pp[1];             // range [cm]
+    const double pexp = pp[2];          // power-law exponent (~1.7-1.8)
+    const double lambda = pp[3];        // nuclear attenuation length [cm]
+    const double sigma = pp[4];          // range straggling [cm]
+    const double B = pp[5];             // constant background
+  
+    const double t = R - x;             // residual range
+    const double eps = 1e-4;
+    const double tpos = (t > eps ? t : eps);
+  
+    // Smooth cutoff beyond R to emulate distal fall-off
+    const double H = 0.5 * (1.0 + TMath::Erf(t / (TMath::Sqrt2() * TMath::Max(sigma, 1e-4))));
+  
+    const double core = A * TMath::Power(tpos, -pexp) * TMath::Exp(-tpos / TMath::Max(lambda, 1e-3));
+    return H * core + B;
+  }
+
+double get_image_plane(double s1) {
+    // Lens parameters in millimeters
+    const double f1 = 30.0;  // focal length lens 1
+    const double f2 = 30.0;  // focal length lens 2
+    const double d = 13.0;   // distance between lens centers
+
+    // Calculate image distance from first lens (s1_prime)
+    double s1_prime = (f1 * s1) / (s1 - f1);
+
+    // Calculate object distance for second lens (s2)
+    double s2 = d - s1_prime;
+
+    // Calculate image distance from second lens (s2_prime)
+    double s2_prime = (f2 * s2) / (s2 - f2);
+
+    // Position of final image plane relative to first lens
+    double x_focal_plane = d + s2_prime;
+
+    return x_focal_plane;
+}
+
 void Debug(int i=0){
     std::cout << " DEBUG DEBUG DEBUG " << i << std::endl;
 }
 
-double Simulation(double size = 200., double lensposition = 0., double sensorpos = 0.) {
-
+double Simulation(string mode = "proton", double NDecay = 1.) {
+    double size = 200.; double lensposition = 0.; double sensorpos = 0.;
     bool debug = false;
     TFile *graphs = new TFile("graphs.root", "UPDATE");
-    FILE *input = fopen("lens_sensor_position_input.txt", "r");
+    
+    // FILE *input = fopen("lens_sensor_position_input.txt", "r");
+    // if (!input) {
+    //     fprintf(stderr, "Error opening file\n");
+    //     return 0;
+    // } 
 
     std::vector<double> lenspositions_v, sensorpositions_v;
     double col_1 = 0, col_2 = 0;
-    while (fscanf(input, "%lf %lf", &col_1, &col_2) == 2) {
-        lenspositions_v.push_back(col_1);
-        sensorpositions_v.push_back(col_2);
+    // while (fscanf(input, "%lf %lf", &col_1, &col_2) == 2) {
+    //     lenspositions_v.push_back(col_1);
+    //     sensorpositions_v.push_back(col_2);
+    // }
+    lenspositions_v.push_back(155);
+    // sensorpositions_v.push_back(lenspositions_v.at(0) + get_image_plane(lenspositions_v.at(0) - 100 ));
+    sensorpositions_v.push_back(180.7);
+    cout << " lens pos " << lenspositions_v.at(0) << " sensor pos " << lenspositions_v.at(0) + get_image_plane(lenspositions_v.at(0)) << endl;
+    
+
+    FILE *part_input = nullptr;
+    if (mode == "proton"){
+        part_input = fopen("PhotonData/proton_T100MeV_edep_bragg.csv", "r");
+    } else if (mode == "alpha"){
+        part_input = fopen("PhotonData/alpha.csv", "r");
+    } else if (mode == "MIP"){
+        part_input = fopen("PhotonData/MIP.csv", "r");
     }
+        
+
+    // FILE *part_input = fopen("PhotonData/alpha.csv", "r");
+    if (!part_input) {
+        fprintf(stderr, "Error opening file\n");
+        return 0;
+    } 
+    char line[256];
+    if (part_input){
+        if (!fgets(line, sizeof(line), part_input)) {
+            fprintf(stderr, "Error reading header line\n");
+            fclose(part_input);
+            return 0;
+        }
+    }
+
+    std::vector<double> part_pos_v, part_energy_dep_v;   
+    while (fgets(line, sizeof(line), part_input)) {
+        double col_1 = 0, col_2 = 0;
+        // Use sscanf with comma separation
+        if (sscanf(line, "%lf,%lf", &col_1, &col_2) == 2) {
+            part_pos_v.push_back(col_1*10);//convert to mm
+            part_energy_dep_v.push_back(col_2*1e6);//conversion to eV
+        }
+    }
+
+
+    // while (fscanf(part_input, "%lf,%lf", &col_1, &col_2) == 2) {
+    //     part_pos_v.push_back(col_1);
+    //     part_energy_dep_v.push_back(col_2);
+    // }
+
+    fclose(part_input);
 
     Double_t lens_th_30 = 6.5, lens_Surf_R1 = 45.61, lens_th_20 = 5.0, lens_th = 0;
     Double_t d_1_2 = lens_th_30/2 + lens_th_30/2 + 6.5;
@@ -30,7 +124,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     Double_t Flange_Thick = 22, WLS_Zpos = 0.;
     Double_t d_ThGEMtoFlange = 50, PEN_to_Flange = d_ThGEMtoFlange;
     Double_t w_pos = d_ThGEMtoFlange + Flange_Thick/2;
-    Double_t distr_fact = 0.5, MPPC_QE = 0.4, Acr_tr = 0.9;
+    Double_t distr_fact = 0.5, MPPC_QE = 0.4, Acr_tr = 0.97;
     double PEN_QE = 0.25, mesh_t = 0.8;
     Double_t dt_Ar = 1200, dt_CF4 = 100;
     Double_t dt = dt_Ar * TMath::Sqrt(10) * 1e-3, tr_size = 1.;
@@ -41,6 +135,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     Double_t cube_side = 100; //size of cube
     Double_t cube_th = cube_side;
     Double_t cube_z = 50;
+    Double_t z = 0;
     Cube ScCube(cube_z, cube_th, cube_side/2., EJ_220_idx, 1);//double posz0, double width0, double TR0,  double indexrefraction0, int id = 0
     // Disc ScCube(cube_z, cube_th, cube_side/2., EJ_220_idx, 1);//double posz0, double width0, double TR0,  double indexrefraction0, int id = 0 
     PlaneConvexLens PlConvLens(130.1,10, 0.1,100,1.515,5);//double posz0, double width0, double R0, double TR0,  double indexrefraction0, int id = 0 
@@ -48,21 +143,22 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     Disc pmt(pmt_pos, 2., 12.5, 1.458, 1);
 
     std::vector<Aperture*> a1_store;
+    std::vector<Aperture*> a0_store;
     std::vector<Lens*> lens_store, lens_store_2;
     for (size_t i = 0; i < lenspositions_v.size(); i++) {
         lens_store.push_back(new Lens(lenspositions_v.at(i), lens_th_30, lens_Surf_R1, lens_ApRad, 1.833, 3));
         lens_store_2.push_back(new Lens(lenspositions_v.at(i) + d_1_2, lens_th_30, lens_Surf_R1, lens_ApRad, 1.833, 3));
-        a1_store.push_back(new Aperture(lenspositions_v.at(i) - lens_th_30/2 - 3, 1., 15., 2));
+        a0_store.push_back(new Aperture(lenspositions_v.at(i) - lens_th_30/2 - 3 -37.3, 1., 15, 2));// ouble posz0, double width0, double TR0, int id = 0
+        a1_store.push_back(new Aperture(lenspositions_v.at(i) - lens_th_30/2 - 3, 1., 10, 2));// ouble posz0, double width0, double TR0, int id = 0
     }
+
     for (size_t i = 0; i < lens_store.size(); i++) {
         lens_store.at(i)->SetDebug(debug);
         lens_store_2.at(i)->SetDebug(debug);
+        a0_store.at(i)->SetDebug(debug);
         a1_store.at(i)->SetDebug(debug);
     }
    
-
-    
-
     std::vector<Double_t> xOnPEN, yOnPEN;
     std::vector<double> PhtPerBin, eff_mag, lens_acc, mag_store, aberr_store;
     
@@ -76,7 +172,9 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     TH2D *hsensornolens = new TH2D("hsensornolens", "4. Photons detected by MPPC without lens ", 16, -8., 8., 16, -8., 8.);
     TH2D *hsensorlens = new TH2D("hsensorlens", "3. Photons detected by MPPC; X position on MPPC (mm); Y position on MPPC (mm) ", 16, -8., 8., 16, -8., 8.);
     TH2D *hlens = new TH2D("hlens", "2. Photons distribution on the first lens; X Position on lens (mm); Y Position on lens (mm) ", 100, -lens_ApRad-10, lens_ApRad+10, 100, -lens_ApRad-10, lens_ApRad+10);
+    TH2D *hlens2 = new TH2D("hlens2", "2. Photons distribution on the first lens; X Position on lens (mm); Y Position on lens (mm) ", 100, -lens_ApRad-10, lens_ApRad+10, 100, -lens_ApRad-10, lens_ApRad+10);
     TH2D *hScExit = new TH2D("hScExit", " Photons exiting the scintillator; X (mm); Y (mm) ", 100, -50., 50., 100, -50., 50.);
+    TH2D *hDiaphragm = new TH2D("hDiaprhagm", " Photons passing the diaphragm; X (mm); Y (mm) ", 100, -50., 50., 100, -50., 50.);
     TH2D *hScExit2 = new TH2D("hScExit2", "  ", 100, -50., 50., 100, -50., 50.);
     TH1D *haberr = new TH1D("haberr", "", 1000, 0., size/10.);
     TH1D *htest = new TH1D("htest", "", 1000, -8, 8);
@@ -88,7 +186,7 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
 
     double D = 100., d1 = w_pos;
     int ntot = 0;
-    double NDecay = 100., MIP_e = 4.5e5, part_propag = 50.;
+    double MIP_e = 2.2e5, part_propag = 100.;
     //Muons 2.2 MeV per cm or 0.22 MeV per mm.
     //protons 4.5 MeV per cm or 0.45 MeV per mm
     //Alpha 5.3 MeV per cm or 0.53 MeV per mm// attention genereated with copilot AI
@@ -99,10 +197,12 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     cout << " Input Energy (eV) " << InEnergy << endl;
     double pht_per_eV = 0.01, prim_pht = InEnergy * pht_per_eV;
     int PhtAtThGEM = NDecay * prim_pht;
-    cout << " Initial conditions: " << PhtAtThGEM << "  NDecay " << NDecay << "  Primary photons per decay " << prim_pht << endl;
+    
+    
     double photAtLens = 0;
 
     for (size_t pos = 0; pos < lens_store.size(); pos++) {
+
         double lensposition_2 = lens_store_2[pos]->GetLensPos();
         lensposition = lens_store.at(pos)->GetLensPos();
         lens_th = lens_store.at(pos)->GetThickness();
@@ -128,71 +228,107 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         hRICx->Reset("ICESM");
         dx_mean = 0;
       
-        ntot = PhtAtThGEM;
-        double z = 50;
+        // ntot = PhtAtThGEM;
         TRandom r;
         TRandom r2;
-        // PhtAtThGEM = 100000;
+
         double forward_photons = ntot/2.;
-        // forward_photons =1000;
         double posns = 100;
-        for (size_t i = 0; i < forward_photons; i++) {
-            
-            double x = r2.Uniform(-50, -0+part_propag);
-            double y = 0;//r2.Uniform(-5.,5.);//0;
-            z = 50.;
-            
-            xOnPEN.push_back(x);
-            yOnPEN.push_back(y);
-            h1_2d->Fill(x,y);
-            h1_3d->Fill(x,y,z);
-            
-            double costheta = r2.Uniform(0.,1.);
-            double phi = r2.Uniform(0,2*3.141592);
-            double sintheta = TMath::Sqrt(1.-(costheta*costheta));
-            
-            double vx = sintheta*TMath::Cos(phi), vy = sintheta*TMath::Sin(phi), vz = costheta;
-            testspherical->Fill(vx, vy, vz);
-            test2ddist->Fill(costheta,phi);
-            Ray ray(x, y, z, vx, vy, vz, 1.);
-            double thx = vx/vz, thy = vy/vz;
-        
-            d1=100.;
+        double x_min = -50;
+        double z_min = 40;
+        double z_step = 20./part_pos_v.size();
 
-            if (TMath::Abs(x+thx*d1) < 50. && TMath::Abs(y+thy*d1) < 50.) hScExit2->Fill(x+thx*d1,y+thy*d1);
-            if (TMath::Abs(x+thx*sensorpos)<8. &&  TMath::Abs(y+thy*sensorpos)<8.) hsensornolens->Fill(x+thx*sensorpos,y+thy*sensorpos);
-            if (TMath::Sqrt(pow(x+thx*(lensposition+(lens_th/2)),2) + pow(y+thy*(lensposition+(lens_th/2)),2)) < lens_ApRad) photAtLens++;
+        double z_max = 0;
+        double step = 0;
+        int step_no = 0;
 
-            if (!ScCube.Transport(ray)) continue;
-
-            hScExit->Fill(ray.GetX(), ray.GetY());
-           
-            if (!lens_store.at(pos)->Transport(ray)) continue;
-            hlens->Fill(ray.GetX(), ray.GetY());
-            double Ratlens = TMath::Sqrt(ray.GetX()*ray.GetX()+ray.GetY()*ray.GetY());
-            ray.Transport(lensposition);
-            Double_t FY = (2*(ray.GetY() + lens_ApRad) / (2*lens_ApRad))-1;
-            Double_t FX = (2*(ray.GetX() + lens_ApRad) / (2*lens_ApRad))-1;
-            if (!lens_store_2.at(pos)->Transport(ray)) continue;
-            ray.Transport(sensorpos);
-
-            Double_t DY = ray.GetY(), DX = ray.GetX();
-            if (-1<y && y<1) hRICy->Fill(FY, DY);
-            if (-1<x && x<1 && FX>0) {
-                hRICx->Fill(FX, DX);
-                dx_mean += DX;
-            }
-            Bool_t eff_con = r.Uniform() < MPPC_QE && r.Uniform() < Acr_tr;
-            if (fabs(ray.GetX())<8. && fabs(ray.GetY())<8. && eff_con) {
-                hsensorlens->Fill(ray.GetX(), ray.GetY());
-                htest->Fill(ray.GetX());
-                hdxr->Fill(Ratlens, x, ray.GetX());
-                h2x->Fill(x, ray.GetX());
-                hpx->Fill(x, ray.GetX());
-                h2y->Fill(y, ray.GetY());
-                hpy->Fill(y, ray.GetY());
-            }
+        if (mode == "MIP") {
+            step = part_pos_v.at(0);
+            step_no = part_pos_v.size();
+            z = 0.1;
+        } else if (mode == "proton") {
+            step = part_pos_v.at(0);
+            step_no = part_pos_v.size();
+            z = 0.1;
+        } else if (mode == "alpha"){
+            step = part_pos_v.at(0);// in reality is in micrometers alpha gets absorbed
+            step_no = part_pos_v.size();
+            x_min = -49;
+            z = 50;
         }
+
+        ntot=0;
+        for (int i(0); i<step_no; i++){
+            double x_max = x_min + step;
+            forward_photons = NDecay * part_energy_dep_v.at(i) * pht_per_eV /2;//only forward. this is basically forward photons per mm.
+
+            for (size_t j = 0; j < forward_photons; j++) {
+                double x = r2.Uniform(x_min, x_max);
+                double y = 25;//r2.Uniform(-5.,5.);//0;                
+                // double z = r2.Uniform(z_min, z_max);
+                
+                xOnPEN.push_back(x);
+                yOnPEN.push_back(y);
+                h1_2d->Fill(x,y);
+                h1_3d->Fill(x,y,z);
+                
+                double costheta = r2.Uniform(0.,1.);
+                double phi = r2.Uniform(0,2*3.141592);
+                double sintheta = TMath::Sqrt(1.-(costheta*costheta));
+                
+                double vx = sintheta*TMath::Cos(phi), vy = sintheta*TMath::Sin(phi), vz = costheta;
+                testspherical->Fill(vx, vy, vz);
+                test2ddist->Fill(costheta,phi);
+                Ray ray(x, y, z, vx, vy, vz, 1.);
+                double thx = vx/vz, thy = vy/vz;
+            
+                d1=100-z;//100 hard coded. not ideal. 
+
+                if (TMath::Abs(x+thx*d1) < 50. && TMath::Abs(y+thy*d1) < 50.) hScExit2->Fill(x+thx*d1,y+thy*d1);
+                if (TMath::Abs(x+thx*sensorpos)<8. &&  TMath::Abs(y+thy*sensorpos)<8.) hsensornolens->Fill(x+thx*sensorpos,y+thy*sensorpos);
+                if (TMath::Sqrt(pow(x+thx*(lensposition+(lens_th/2)),2) + pow(y+thy*(lensposition+(lens_th/2)),2)) < lens_ApRad) photAtLens++;
+
+                if (r.Uniform() > Acr_tr) continue;
+                if (!ScCube.Transport(ray)) continue;
+
+                hScExit->Fill(ray.GetX(), ray.GetY());
+                // if (!a0_store.at(pos)->Transport(ray)) continue;       
+                
+                if (!a1_store.at(pos)->Transport(ray)) continue;
+                hDiaphragm->Fill(ray.GetX(), ray.GetY());
+                if (r.Uniform() > Acr_tr) continue;
+                if (!lens_store.at(pos)->Transport(ray)) continue;
+                hlens->Fill(ray.GetX(), ray.GetY());
+                double Ratlens = TMath::Sqrt(ray.GetX()*ray.GetX()+ray.GetY()*ray.GetY());
+                ray.Transport(lensposition);
+                Double_t FY = (2*(ray.GetY() + lens_ApRad) / (2*lens_ApRad))-1;
+                Double_t FX = (2*(ray.GetX() + lens_ApRad) / (2*lens_ApRad))-1;
+                if (r.Uniform() > Acr_tr) continue;
+                if (!lens_store_2.at(pos)->Transport(ray)) continue;
+                hlens2->Fill(ray.GetX(), ray.GetY());
+                ray.Transport(sensorpos);
+
+                Double_t DY = ray.GetY(), DX = ray.GetX();
+                if (-1<y && y<1) hRICy->Fill(FY, DY);
+                if (-1<x && x<1 && FX>0) {
+                    hRICx->Fill(FX, DX);
+                    dx_mean += DX;
+                }
+                Bool_t eff_con = r.Uniform() < MPPC_QE && r.Uniform() < Acr_tr;
+                if (fabs(ray.GetX())<8. && fabs(ray.GetY())<8. && eff_con) {
+                    hsensorlens->Fill(-ray.GetX(), -ray.GetY());
+                    htest->Fill(ray.GetX());
+                    hdxr->Fill(Ratlens, x, ray.GetX());
+                    h2x->Fill(x, ray.GetX());
+                    hpx->Fill(x, ray.GetX());
+                    h2y->Fill(y, ray.GetY());
+                    hpy->Fill(y, ray.GetY());
+                }
+            }
+        ntot += forward_photons*2;
+        x_min = x_max;
+        z_max = z_min+z_step;
+    }
         
         double bin_content = 0;
         for (int i = 6; i < 12; i++) bin_content += hsensorlens->GetBinContent(i, i);
@@ -208,20 +344,18 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
         eff_mag.push_back((double)hsensorlens->GetEntries()/(double)ntot * 1/(MPPC_QE*Acr_tr));
         lens_acc.push_back(hlens->GetEntries()/ntot);
         hpx->Fit("pol1", "", "same");
-        Debug(0);
         // mag_store.push_back(TMath::Abs(h2ymean->GetFunction("pol1")->GetParameter(1)));
         if (h2ymean->GetFunction("pol1") != nullptr) {
             mag_store.push_back(TMath::Abs(h2ymean->GetFunction("pol1")->GetParameter(1)));
         } else {
             mag_store.push_back(-99);
         }
-        Debug(1);
+        
         aberr_store.push_back(aberr);
         std::cout << " The max number of photons per channel: " << bin_content / 16 / NDecay << std::endl;
         std::cout << " eff * mag " << ((double)hsensorlens->GetEntries()/(double)ntot) * 1/(MPPC_QE*Acr_tr) << " lensposition " << lensposition <<std::endl;
         std::cout << " Photons reaching the lens " << hlens->GetEntries() << " ratio " << hlens->GetEntries()/ntot << " lens/pen "  << hlens->GetEntries()/xOnPEN.size() << std::endl;
     }
-
     
     TCanvas *c = new TCanvas("c", "Overview", 1200, 800);
     c->Divide(2, 3);
@@ -229,10 +363,12 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     c->cd(2); h2y->Draw("colz"); for(int i=0; i<100; i++ ) haberr->Fill(hpy->GetBinError(i+1));
     c->cd(3); hScExit->Scale(1/NDecay); hScExit->Draw("colz"); 
     c->cd(4); hsensornolens->Scale(1/NDecay); hsensornolens->Draw("colz");
-    c->cd(5); hlens->Scale(1/NDecay); hlens->Scale(1/NDecay); hlens->Draw("colz");
+    c->cd(5); hlens->Scale(1/NDecay); hlens->Draw("colz");
     c->cd(6); hdxr->Draw("box");
     c->Update();
 
+    hlens2->Scale(1/NDecay);
+    hDiaphragm->Scale(1/NDecay);
     TBox* box = new TBox(-50, -50, 50, 50);
     box->SetFillStyle(0);  
     box->SetLineColor(kBlack);  // Outline color, e.g. black
@@ -258,8 +394,10 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
 
     
     // c_Img_3D->Update();
+    hScExit2->Scale(1/NDecay);
     TH1D* hScExit2_X = hScExit2->ProjectionX("hScExit2_X");
     TCanvas *c_hScExit2 = new TCanvas("c_hScExit_2", "Photons at the edge of cube", 600, 1200);
+
     c_hScExit2->Divide(1,2);
     c_hScExit2->cd(1);
     hScExit2->Draw("colz");
@@ -268,6 +406,29 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
 
     TCanvas *c_hScExit = new TCanvas("c_hScExit", "Photons at the edge of cube", 600, 600);
     hScExit->Draw("colz");
+
+    TCanvas *c_Bragg_reco = new TCanvas("c_Bragg_reco","", 800,600);
+    TH1D* hsensorlens_X = hsensorlens->ProjectionX("hsensorlens_X");
+    hsensorlens_X ->Draw();
+    double xfit_min = -2;
+    double xfit_max= 6;
+    const int ibmax = hsensorlens_X->GetMaximumBin();
+    const double xmax = hsensorlens_X->GetXaxis()->GetBinCenter(ibmax);
+    const double ymax = hsensorlens_X->GetBinContent(ibmax);
+    
+    const double bw = hsensorlens_X->GetXaxis()->GetBinWidth(ibmax);
+    cout << "MAX BIN EVAH " << bw << endl;
+
+    TF1* f = new TF1("fBragg", braggFunc, xfit_min, xfit_max, 6);
+    f->SetParNames("A","R","p","lambda","sigma","B");
+    f->SetParameters(36, xmax + 0.5*bw, 1., 0.0, 0.02 * TMath::Max(xmax, 1.0), 0.0);
+    f->SetParLimits(2, 1.6, 1.9);   // p in [1.6,1.9]
+    f->SetParLimits(3, 5.0, 500.0); // lambda
+    f->SetParLimits(4, 0.1*bw, 0.2 * TMath::Max(xmax, 1.0)); // sigma
+    f->SetParLimits(1, xfit_min + 0.2*(xfit_max-xfit_min), xfit_max); // R near distal end
+    
+    // hsensorlens_X->Fit(f, "RQN"); // quiet; use "RQ" to see output
+    hsensorlens_X->Fit(f, "R");   // second pass
 
 
     double scale = 1.;
@@ -279,16 +440,22 @@ double Simulation(double size = 200., double lensposition = 0., double sensorpos
     
     std::cout << "\n\n";
     std::cout << " --------------For "<< NDecay<<" identical primary tracks ----------------- " << std::endl;
-    std::cout << " Total photons generated in the scintillator (along the track) " << ntot << endl;
-    std::cout << " Photons emitted at forward" << xOnPEN.size() << " Fraction " << (double)xOnPEN.size()/ntot << endl;
-    std::cout << " Photons reaching the lens " << hlens->GetEntries() << " ratio " << hlens->GetEntries()/ntot << " lens/pen " << hlens->GetEntries()/xOnPEN.size() << std::endl;
-    std::cout << " Fraction of photons reaching the sensor " << std::endl;
-    std::cout << "       With lens " << (double)hsensorlens->GetEntries()/(double)ntot << std::endl;
-    std::cout << "       With no lense " << (double)hsensornolens->GetEntries()/(double)ntot << std::endl;
-    std::cout << " Including the MPPC QE,  With Lense: " << (double)hsensorlens->GetEntries() << endl;
-    std::cout << " ------------------------------------------------------------------- " << std::endl;
-    if (hRICx->GetEntries()!=0) std::cout << "Lens Performance " << dx_mean/hRICx->GetEntries() <<"  Lens pos " << lensposition <<  " mm.  SensorPos " << sensorpos << std::endl;
-    if (mag_store.size() != 0) std::cout << "Magnitude " << mag_store.at(0) <<std::endl;
+    std::cout <<"z \t\t"<< "Ntot\t\t "<< "Scint \t\t" << "Diaphragm \t\t" << "Lens 1\t\t" << "Lens2\t\t" << "MPPC\t\t" << std::endl;
+    std::cout << z  << "            " << ntot << "            " << hScExit->GetEntries() << "          " << hDiaphragm->GetEntries() << "                      " << hlens->GetEntries() << "              "   << hlens2->GetEntries() << "           " << hsensorlens->GetEntries()<< std::endl;
+    std::cout << "               " << ntot << "            " << hScExit->GetEntries()/ntot << "      " << hDiaphragm->GetEntries()/ntot << "                 " << hlens->GetEntries()/ntot << "          "   << hlens2->GetEntries()/ntot << "          " << hsensorlens->GetEntries()/ntot<< std::endl;
+    std::cout << "               " << ntot << "            " << hScExit->GetEntries()/ntot << "      " << hDiaphragm->GetEntries()/hScExit->GetEntries() << "                 " << hlens->GetEntries()/hDiaphragm->GetEntries() << "              "   << hlens2->GetEntries()/hlens->GetEntries() << "              " << hsensorlens->GetEntries()/hlens2->GetEntries()<< std::endl;
+
+    
+     // std::cout << " Total photons generated in the scintillator (along the track) " << ntot << endl;
+    // std::cout << " Photons emitted at forward" << xOnPEN.size() << " Fraction " << (double)xOnPEN.size()/ntot << endl;
+    // std::cout << " Photons reaching the lens " << hlens->GetEntries() << " ratio " << hlens->GetEntries()/ntot << " lens/pen " << hlens->GetEntries()/xOnPEN.size() << std::endl;
+    // std::cout << " Fraction of photons reaching the sensor " << std::endl;
+    // std::cout << "       With lens " << (double)hsensorlens->GetEntries()/(double)ntot << std::endl;
+    // std::cout << "       With no lense " << (double)hsensornolens->GetEntries()/(double)ntot << std::endl;
+    // std::cout << " Including the MPPC QE,  With Lense: " << (double)hsensorlens->GetEntries() << endl;
+    // std::cout << " ------------------------------------------------------------------- " << std::endl;
+    // if (hRICx->GetEntries()!=0) std::cout << "Lens Performance " << dx_mean/hRICx->GetEntries() <<"  Lens pos " << lensposition <<  " mm.  SensorPos " << sensorpos << std::endl;
+    // if (mag_store.size() != 0) std::cout << "Magnitude " << mag_store.at(0) <<std::endl;
 
     return 0;
 
