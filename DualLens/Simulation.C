@@ -28,6 +28,19 @@ static double braggFunc(double* xx, double* pp) {
     return H * core + B;
   }
 
+static double B_Func(double* xx, double* pp) {
+    double x = xx[0]; // depth (z)
+    double a1 = pp[0];
+    double a2 = pp[1];
+    double R0 = pp[2];
+    double p  = pp[3];
+
+    double D1 = a1 * TMath::Power(R0 - x, 1.0/p - 1.0);
+    double D2 = a2 * TMath::Power(R0 - x, 1.0/p);
+
+    return D1+D2;
+}
+
 double get_image_plane(double s1) {
     // Lens parameters in millimeters
     const double f1 = 30.0;  // focal length lens 1
@@ -72,7 +85,9 @@ double Simulation(string mode = "proton", double NDecay = 1.) {
     // }
     lenspositions_v.push_back(155);
     // sensorpositions_v.push_back(lenspositions_v.at(0) + get_image_plane(lenspositions_v.at(0) - 100 ));
-    sensorpositions_v.push_back(180.7);
+    // sensorpositions_v.push_back(180.7);
+    // sensorpositions_v.push_back(187.9);
+    sensorpositions_v.push_back(178.9);
     cout << " lens pos " << lenspositions_v.at(0) << " sensor pos " << lenspositions_v.at(0) + get_image_plane(lenspositions_v.at(0)) << endl;
     
 
@@ -208,7 +223,7 @@ double Simulation(string mode = "proton", double NDecay = 1.) {
         lens_th = lens_store.at(pos)->GetThickness();
         lens_ApRad = lens_store.at(pos)->GetApRad();
         lensposition_2 = lens_store_2.at(pos)->GetLensPos();
-        sensorpos = sensorpositions_v.at(pos) + WLS_Zpos;
+        sensorpos = sensorpositions_v.at(pos);
         cout << " Lens 1 position " << lensposition << " Sensor position " << sensorpos <<  " lens thickenss " << lens_th << "  Lens Aperture Radius " << lens_ApRad << endl;
 
         xOnPEN.clear(); yOnPEN.clear();
@@ -236,9 +251,10 @@ double Simulation(string mode = "proton", double NDecay = 1.) {
         double posns = 100;
         double x_min = -50;
         double z_min = 40;
+        double z_max = 0;
         double z_step = 20./part_pos_v.size();
 
-        double z_max = 0;
+
         double step = 0;
         int step_no = 0;
 
@@ -246,6 +262,9 @@ double Simulation(string mode = "proton", double NDecay = 1.) {
             step = part_pos_v.at(0);
             step_no = part_pos_v.size();
             z = 0.1;
+            const double z_var = 1;
+            z_min = z -z_var;
+            z_max = z +z_var;
         } else if (mode == "proton") {
             step = part_pos_v.at(0);
             step_no = part_pos_v.size();
@@ -264,8 +283,8 @@ double Simulation(string mode = "proton", double NDecay = 1.) {
 
             for (size_t j = 0; j < forward_photons; j++) {
                 double x = r2.Uniform(x_min, x_max);
-                double y = 25;//r2.Uniform(-5.,5.);//0;                
-                // double z = r2.Uniform(z_min, z_max);
+                double y = 0;//r2.Uniform(-5.,5.);//0;                
+                z = r2.Uniform(z_min, z_max);
                 
                 xOnPEN.push_back(x);
                 yOnPEN.push_back(y);
@@ -392,8 +411,6 @@ double Simulation(string mode = "proton", double NDecay = 1.) {
     TCanvas *c_testspherical_3D = new TCanvas("c_testespherical", "Ima", 1200, 800);
     testspherical->Draw("boxz");
 
-    
-    // c_Img_3D->Update();
     hScExit2->Scale(1/NDecay);
     TH1D* hScExit2_X = hScExit2->ProjectionX("hScExit2_X");
     TCanvas *c_hScExit2 = new TCanvas("c_hScExit_2", "Photons at the edge of cube", 600, 1200);
@@ -407,43 +424,86 @@ double Simulation(string mode = "proton", double NDecay = 1.) {
     TCanvas *c_hScExit = new TCanvas("c_hScExit", "Photons at the edge of cube", 600, 600);
     hScExit->Draw("colz");
 
+
+    TCanvas* cTest = new TCanvas("c_B_Func", "B Func", 800, 600);
+    double z_min = 0.0;
+    double z_max = 9.0;
+
+    TF1* f = new TF1("B_Func", B_Func, z_min, z_max, 4);
+    f->SetParameters(66.0, 0.0, 10.0, 2.);
+    f->SetParName(0, "a1");
+    f->SetParName(1, "a2");
+    f->SetParName(2, "R0");
+    f->SetParName(3, "p");
+    f->SetParameters(1.0, 0.001, 10.0, 1.7);
+    f->SetTitle("Bragg Curve;Depth z [cm];D(z)");
+    f->Draw();
+
+
     TCanvas *c_Bragg_reco = new TCanvas("c_Bragg_reco","", 800,600);
     TH1D* hsensorlens_X = hsensorlens->ProjectionX("hsensorlens_X");
-    hsensorlens_X ->Draw();
-    double xfit_min = -2;
-    double xfit_max= 6;
-    const int ibmax = hsensorlens_X->GetMaximumBin();
-    const double xmax = hsensorlens_X->GetXaxis()->GetBinCenter(ibmax);
-    const double ymax = hsensorlens_X->GetBinContent(ibmax);
-    
-    const double bw = hsensorlens_X->GetXaxis()->GetBinWidth(ibmax);
-    cout << "MAX BIN EVAH " << bw << endl;
+    TH1D* hBraggCurve = new TH1D("hBraggCurve", "Bragg Curve Histogram", 16, 0, 16);
 
-    TF1* f = new TF1("fBragg", braggFunc, xfit_min, xfit_max, 6);
-    f->SetParNames("A","R","p","lambda","sigma","B");
-    f->SetParameters(36, xmax + 0.5*bw, 1., 0.0, 0.02 * TMath::Max(xmax, 1.0), 0.0);
-    f->SetParLimits(2, 1.6, 1.9);   // p in [1.6,1.9]
-    f->SetParLimits(3, 5.0, 500.0); // lambda
-    f->SetParLimits(4, 0.1*bw, 0.2 * TMath::Max(xmax, 1.0)); // sigma
-    f->SetParLimits(1, xfit_min + 0.2*(xfit_max-xfit_min), xfit_max); // R near distal end
-    
-    // hsensorlens_X->Fit(f, "RQN"); // quiet; use "RQ" to see output
-    hsensorlens_X->Fit(f, "R");   // second pass
+    int nbins = hsensorlens_X->GetNbinsX();
+    TGraphErrors* gr = new TGraphErrors(nbins);
+
+    for (int i = 1; i <= nbins; i++) {  // histograms bins start at 1
+        double binContent = hsensorlens_X->GetBinContent(i);
+        hBraggCurve->SetBinContent(i, binContent);
+        double x = hsensorlens_X->GetBinCenter(i) +8;    // x = bin center
+        double y = hsensorlens_X->GetBinContent(i) -20;   // y = bin content
+        double ex = 0;// hsensorlens_X->GetBinWidth(i)/2;  // x error = half bin width
+        double ey = hsensorlens_X->GetBinError(i);    // y error = bin error
+
+        gr->SetPoint(i-1, x, y);         // TGraphErrors points are zero-based
+        gr->SetPointError(i-1, ex, ey);
+    }
+    gr->Draw("AP*");
+    gStyle->SetOptFit(1111);
+    gr->Fit("B_Func","","",0,12);
 
 
-    double scale = 1.;
+    double scale = 1.;  
     if (hpx->GetFunction("pol1") != nullptr) {scale = 1. / (hpx->GetFunction("pol1")->GetParameter(1));}
     else {
         scale = 1.;
         cout << "Be careful the results are not trustworthy!" << endl;
     }
     
-    std::cout << "\n\n";
-    std::cout << " --------------For "<< NDecay<<" identical primary tracks ----------------- " << std::endl;
-    std::cout <<"z \t\t"<< "Ntot\t\t "<< "Scint \t\t" << "Diaphragm \t\t" << "Lens 1\t\t" << "Lens2\t\t" << "MPPC\t\t" << std::endl;
-    std::cout << z  << "            " << ntot << "            " << hScExit->GetEntries() << "          " << hDiaphragm->GetEntries() << "                      " << hlens->GetEntries() << "              "   << hlens2->GetEntries() << "           " << hsensorlens->GetEntries()<< std::endl;
-    std::cout << "               " << ntot << "            " << hScExit->GetEntries()/ntot << "      " << hDiaphragm->GetEntries()/ntot << "                 " << hlens->GetEntries()/ntot << "          "   << hlens2->GetEntries()/ntot << "          " << hsensorlens->GetEntries()/ntot<< std::endl;
-    std::cout << "               " << ntot << "            " << hScExit->GetEntries()/ntot << "      " << hDiaphragm->GetEntries()/hScExit->GetEntries() << "                 " << hlens->GetEntries()/hDiaphragm->GetEntries() << "              "   << hlens2->GetEntries()/hlens->GetEntries() << "              " << hsensorlens->GetEntries()/hlens2->GetEntries()<< std::endl;
+std::cout << "\n\n";
+std::cout << " --------------For "<< NDecay<<" identical primary tracks ----------------- " << std::endl;
+std::cout <<"z \t\t"<< "Ntot\t\t "<< "Scint \t\t" << "Diaphragm \t" << "Lens 1\t\t" << "Lens2\t\t" << "MPPC (no QE) \t" << "MPPC\t\t" << std::endl;
+std::cout << std::scientific << std::setprecision(2);
+
+std::cout << std::setw(10) << z
+          << std::setw(15) << ntot / NDecay
+          << std::setw(15) << hScExit->GetEntries() / NDecay
+          << std::setw(15) << hDiaphragm->GetEntries() / NDecay
+          << std::setw(15) << hlens->GetEntries() / NDecay
+          << std::setw(15) << hlens2->GetEntries() / NDecay
+          << std::setw(15) << hsensorlens->GetEntries()/MPPC_QE / NDecay
+          << std::setw(15) << hsensorlens->GetEntries() / NDecay
+          << std::endl;
+
+std::cout << std::setw(10) << ""
+          << std::setw(15) << ntot / NDecay
+          << std::setw(15) << hScExit->GetEntries() / ntot
+          << std::setw(15) << hDiaphragm->GetEntries() / ntot
+          << std::setw(15) << hlens->GetEntries() / ntot
+          << std::setw(15) << hlens2->GetEntries() / ntot
+          << std::setw(15) << hsensorlens->GetEntries()/MPPC_QE/ ntot
+          << std::setw(15) << hsensorlens->GetEntries() / ntot
+          << std::endl;
+
+std::cout << std::setw(10) << ""
+          << std::setw(15) << ntot / NDecay
+          << std::setw(15) << hScExit->GetEntries() / ntot
+          << std::setw(15) << hDiaphragm->GetEntries() / hScExit->GetEntries()
+          << std::setw(15) << hlens->GetEntries() / hDiaphragm->GetEntries()
+          << std::setw(15) << hlens2->GetEntries() / hlens->GetEntries()
+          << std::setw(15) << hsensorlens->GetEntries() /MPPC_QE/ hlens2->GetEntries()
+          << std::setw(15) << hsensorlens->GetEntries() / hlens2->GetEntries()
+          << std::endl;
 
     
      // std::cout << " Total photons generated in the scintillator (along the track) " << ntot << endl;
