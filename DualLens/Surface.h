@@ -24,7 +24,7 @@ class PlanarSquareSurface {
      ray.Transport(z); // Transport the ray to this location
      
      if (TMath::Abs(ray.GetX()) > half_side || TMath::Abs(ray.GetY()) > half_side) return false; 
-    //  if (40 < ray.GetX() && ray.GetX() < 50 ) cout<< "ASDASDASDASDAS" << endl;
+ 
      if( debug ) ray.Print(" Ray at the entrance of planar surface ");
      return true;
    }
@@ -119,10 +119,9 @@ class SphericalSurface {
 
     double discr = b*b-4*a*c;
 
-    if( discr <= 0 ) {
-      return false;
-    }
-
+    // No crossing 
+    if( discr <= 0 ) return false;
+    
     double lambda1 = (-b+TMath::Sqrt(discr))/(2.*a);
     double lambda2 = (-b-TMath::Sqrt(discr))/(2.*a);
 
@@ -130,9 +129,8 @@ class SphericalSurface {
     double z2 = ray.GetZ()+lambda2*ray.GetVZ();
     double z;
 
-    if( z1 < ray.GetZ() && z2 < ray.GetZ() ) {
+    if( z1 < ray.GetZ() && z2 < ray.GetZ() ) 
       return false;
-    }
     else if ( z1 > ray.GetZ() && z2 > ray.GetZ() )
       z = TMath::Min(z1,z2);
     else if( z1 < ray.GetZ() )
@@ -142,7 +140,7 @@ class SphericalSurface {
 
     ray.Transport(z); // Transport the ray to this location.
     if( TR < TMath::Sqrt( ray.GetX()*ray.GetX()+ ray.GetY()*ray.GetY()) ) return false;
-
+    
     if( debug ) ray.Print(" Ray at the entrace of spherical surface ");
 
     return true;
