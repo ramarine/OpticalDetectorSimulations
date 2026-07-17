@@ -31,8 +31,10 @@ double Default2Lens(double positionparticle = -50.){
     // PlaneConvexLens ECubeLens(12.0/2.,12.0,39.24,50.0/2.,1.52,0);
     // Lens at the side of the cube  (75x75) 
     // PlaneConvexLens ECubeLens(18.86/2.,18.86,73.50,75.0/2.,1.52,0);
-    // Lens at the side of the cube  (100x100) 
-        PlaneConvexLens ECubePCXLens(20./2.,20.,77.53,100.0/2.,1.52,0);
+    // Lens at the side of the cube  (100x150) 
+    PlaneConvexLens ECubePCXLens(20./2.,20.,77.53,100.0/2.,1.52,0);
+    // Lens at the side of the cube  (100x200) 
+    // PlaneConvexLens ECubePCXLens(14./2.,14.,103.36,100./2.,1.52,0);
     // Lens at the side of the cube  (100x200) 
     // PlaneConvexLens ECubeLens(14./2.,14.,103.36,100.0/2.,1.52,0);
 
@@ -41,16 +43,28 @@ double Default2Lens(double positionparticle = -50.){
 
     // ConvexPlaneLens(double posz0, double width0, double R0, double TR0,  double indexrefraction0, int id = 0 )
 
-    // 100x300 planoconvex lense
+#if 0	
+    // 30x30 convex lense
     double width1 = 6.5;
     double pos1 = 7.+14.6+17.26+width1/2.;
     double Radious1 = 45.61;
     double Diameter1 = 30.;
     double Index1 = 1.833;  // N-SF11
+#else
+    // 40x40 convex lense
+    double width1 = 8.5;
+    double pos1 = 7.+14.6+17.26+width1/2.;
+    double Radious1 = 60.85;
+    double Diameter1 = 40.;
+    double Index1 = 1.833;  // N-SF11
 
+#endif 
+
+
+    
     double posApp = pos1-width1/2.;
     
-    Aperture App(posApp,0.1,30.,2); 
+    Aperture App(posApp,0.1,50.,2); 
     
     Lens ELens(pos1,width1,Radious1,Diameter1/2.,Index1,1);
 
@@ -58,7 +72,7 @@ double Default2Lens(double positionparticle = -50.){
     
     Lens ELens2(pos2,width1,Radious1,Diameter1/2.,Index1,3);
     
-    int total = 1e+6;
+    int total = 3.e+6;
     int accepted = 0;
 
     double length = 100.;
@@ -90,8 +104,8 @@ double Default2Lens(double positionparticle = -50.){
       Ray ray(x, y, z, vx, vy, vz, 1.);
       
       if (!ECube.Transport(ray)) continue;
-      //  if (!ECubePCXLens.Transport(ray)) continue;
-      if (!ECubePCVLens.Transport(ray)) continue;
+      if (!ECubePCXLens.Transport(ray)) continue;
+      //if (!ECubePCVLens.Transport(ray)) continue;
       
       // Compute the crossing point with y = 0
       double zat0 = ray.GetZ()+(y-ray.GetY())*ray.GetVZ()/ray.GetVY();
