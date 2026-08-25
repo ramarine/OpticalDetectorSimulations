@@ -19,6 +19,11 @@ class Ray{
 
   double indexrefraction;
 
+  std::vector<double> xtraj;
+  std::vector<double> ytraj;
+  std::vector<double> ztraj; 
+
+  
   bool debug;
 
  public:
@@ -39,13 +44,15 @@ class Ray{
     vzin = vz = vz0/norm;
    }
 
-  void Transport(double znew){
+  bool Transport(double znew){
     double lambda = (znew-z)/vz;
+    if( lambda < 0 ) return false; 
     z = znew;
     x+=lambda*vx;
     y+=lambda*vy;
 
     if( debug == true ) Print("Transport");
+    return true; 
   }
 
   double GetX(void) { return x;}
@@ -65,6 +72,20 @@ class Ray{
   void SetDir(double ax,double ay,double az) {
     double norm = TMath::Sqrt(ax*ax+ay*ay+az*az);
     vx = ax/norm; vy = ay/norm;vz = az/norm;
+  }
+
+
+  void AddPointTrajectory(void){
+    xtraj.push_back(GetX());
+    ytraj.push_back(GetY());
+    ztraj.push_back(GetZ());
+  }
+
+
+  void GetTrajectory(vector<double> &x,vector<double> &y,vector<double> &z){
+    x = xtraj;
+    y = ytraj;
+    z = ztraj;
   }
 
   void SetDebug(bool a) { debug = a;}

@@ -3,6 +3,9 @@
 #include "TMatrixD.h"
 #include "Ray.h"
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 #ifndef __SURFACE__
 #define __SURFACE__
@@ -17,18 +20,35 @@ class PlanarSquareSurface {
    PlanarSquareSurface(double z0, double half_side0) {// surface centred at 0
      z = z0;
      half_side = half_side0;
+     srand(time(NULL));
    }
  
    bool Transport(Ray &ray){
      if(z < ray.GetZ() ) return false;// if ray is already downstream of plane
-     ray.Transport(z); // Transport the ray to this location
+     if( !ray.Transport(z) ) return false; // Transport the ray to this location
      
      if (TMath::Abs(ray.GetX()) > half_side || TMath::Abs(ray.GetY()) > half_side) return false; 
-    //  if (40 < ray.GetX() && ray.GetX() < 50 ) cout<< "ASDASDASDASDAS" << endl;
+ 
      if( debug ) ray.Print(" Ray at the entrance of planar surface ");
      return true;
    }
- 
+
+   double ReflFactor2surf(double cos0, double n0, double n1, double &cos1 ) {
+     double sin0 =sqrt(1-cos0*cos0);
+     double sin1 = n0/n1*sin0;
+     
+     if( sin1 >=  1. ) return 1.; 
+     
+     cos1 = sqrt(1-sin1*sin1); 
+     
+     double rs = (n0*cos0-n1*cos1)/(n0*cos0+n1*cos1);
+     double rp = (n1*cos0-n0*cos1)/(n1*cos0+n0*cos1);
+     
+     double R = (rs*rs+rp*rp)/2.; // reflection scint-air
+     
+     return R;
+   }
+  
    bool Refraction(Ray &ray,double index){
      double sinangle = TMath::Sqrt(1.-ray.GetVZ()*ray.GetVZ());//sin theta in
      double sinagleout = ray.GetIdxR()*sinangle/index;
@@ -37,18 +57,27 @@ class PlanarSquareSurface {
      double vx = sinagleout*TMath::Cos(phi);
      double vy = sinagleout*TMath::Sin(phi);
      double vz = TMath::Sqrt(1.-sinagleout*sinagleout);
- 
+
+     // Fresnel transmitance
+
+     double cos0 = TMath::Abs(ray.GetVZ());
+     double cos1; 
+     
+     double Transmitance = 1.-ReflFactor2surf(cos0, ray.GetIdxR(), index, cos1 );
+     double Rval = (double)rand()/(double)RAND_MAX;
+          
+     if( Rval >  Transmitance )  return false; 
      ray.SetDir(vx,vy,vz);
- 
      ray.SetIdxR(index);
  
      if( debug ) ray.Print(" Ray at the exit of planar surface ");
- 
+
      return true;
    }
  
    void SetDebug(bool a) { debug = a;}
  };
+
 
 class PlanarSurface {
  private:
@@ -60,11 +89,28 @@ class PlanarSurface {
   PlanarSurface(double z0,double TR0) {
     z = z0;
     TR = TR0;
+    srand(time(NULL));
+  }
+
+  double ReflFactor2surf(double cos0, double n0, double n1, double &cos1 ) {
+    double sin0 =sqrt(1-cos0*cos0);
+    double sin1 = n0/n1*sin0;
+    
+    if( sin1 >=  1. ) return 1.; 
+    
+    cos1 = sqrt(1-sin1*sin1); 
+    
+    double rs = (n0*cos0-n1*cos1)/(n0*cos0+n1*cos1);
+    double rp = (n1*cos0-n0*cos1)/(n1*cos0+n0*cos1);
+    
+    double R = (rs*rs+rp*rp)/2.; // reflection scint-air
+    
+    return R;
   }
 
   bool Transport(Ray &ray){
-    if(z < ray.GetZ() ) return false;// if ray is already downstream of plane
-    ray.Transport(z); // Transport the ray to this location
+    if((z-ray.GetZ())/ray.GetVZ() < 0  ) return false;// if ray is already downstream of plane
+    if( !ray.Transport(z)) return false; // Transport the ray to this location
     
     if( TR < TMath::Sqrt( ray.GetX()*ray.GetX()+ ray.GetY()*ray.GetY()) ) return false; 
 
@@ -83,6 +129,17 @@ class PlanarSurface {
     double vy = sinagleout*TMath::Sin(phi);
     double vz = TMath::Sqrt(1.-sinagleout*sinagleout);
 
+
+    // Fresnel transmitance
+    
+    double cos0 = TMath::Abs(ray.GetVZ());
+    double cos1; 
+    
+    double Transmitance = 1.-ReflFactor2surf(cos0, ray.GetIdxR(), index, cos1 );
+    double Rval = (double)rand()/(double)RAND_MAX;
+    
+    if( Rval >  Transmitance )  return false; 
+    
     ray.SetDir(vx,vy,vz);
 
     ray.SetIdxR(index);
@@ -107,8 +164,26 @@ class SphericalSurface {
     z0 = zc;
     R = R0;
     TR = TR0;
+    srand(time(NULL));
   }
 
+
+  double ReflFactor2surf(double cos0, double n0, double n1, double &cos1 ) {
+    double sin0 =sqrt(1-cos0*cos0);
+    double sin1 = n0/n1*sin0;
+    
+    if( sin1 >=  1. ) return 1.; 
+    
+    cos1 = sqrt(1-sin1*sin1); 
+    
+    double rs = (n0*cos0-n1*cos1)/(n0*cos0+n1*cos1);
+    double rp = (n1*cos0-n0*cos1)/(n1*cos0+n0*cos1);
+    
+    double R = (rs*rs+rp*rp)/2.; // reflection scint-air
+    
+    return R;
+  }
+  
   void SetDebug(bool a) { debug = a;}
 
   bool Transport(Ray &ray){
@@ -119,10 +194,9 @@ class SphericalSurface {
 
     double discr = b*b-4*a*c;
 
-    if( discr <= 0 ) {
-      return false;
-    }
-
+    // No crossing 
+    if( discr <= 0 ) return false;
+    
     double lambda1 = (-b+TMath::Sqrt(discr))/(2.*a);
     double lambda2 = (-b-TMath::Sqrt(discr))/(2.*a);
 
@@ -130,9 +204,8 @@ class SphericalSurface {
     double z2 = ray.GetZ()+lambda2*ray.GetVZ();
     double z;
 
-    if( z1 < ray.GetZ() && z2 < ray.GetZ() ) {
+    if( z1 < ray.GetZ() && z2 < ray.GetZ() ) 
       return false;
-    }
     else if ( z1 > ray.GetZ() && z2 > ray.GetZ() )
       z = TMath::Min(z1,z2);
     else if( z1 < ray.GetZ() )
@@ -140,9 +213,9 @@ class SphericalSurface {
     else
       z = z1;
 
-    ray.Transport(z); // Transport the ray to this location.
+    if( !ray.Transport(z) ) return false; // Transport the ray to this location.
     if( TR < TMath::Sqrt( ray.GetX()*ray.GetX()+ ray.GetY()*ray.GetY()) ) return false;
-
+    
     if( debug ) ray.Print(" Ray at the entrace of spherical surface ");
 
     return true;
@@ -182,23 +255,27 @@ class SphericalSurface {
     x[1] = y[2]*z[0]-y[0]*z[2];
     x[2] = y[0]*z[1]-y[1]*z[0];
 
-    //    std::cout << "X ( " << x[0] << " , " << x[1] << " , " << x[2] << " ) " << std::endl;
-
-
 
     double cosangle = z[0]*ray.GetVX()+z[1]*ray.GetVY()+z[2]*ray.GetVZ();
 
     double sinangle = TMath::Sqrt(1.-cosangle*cosangle);
     double sinangleout = ray.GetIdxR()*sinangle/index;
 
-    //    std::cout << " Sin angle  " << sinangle << " >>>>> " << sinangleout << std::endl;
-
     if( TMath::Abs(sinangleout) > 1. ) { return false; }
 
+    
+    // Fresnel transmitance
+    double cos1; 
+    
+    double Transmitance = 1.-ReflFactor2surf(abs(cosangle), ray.GetIdxR(), index, cos1 );
+    double Rval = (double)rand()/(double)RAND_MAX;
+
+       
+    if( Rval >  Transmitance )  { return false; }
+
+       
     double phi = TMath::ATan2(y[0]*ray.GetVX()+y[1]*ray.GetVY()+y[2]*ray.GetVZ(),
 			      x[0]*ray.GetVX()+x[1]*ray.GetVY()+x[2]*ray.GetVZ());
-
-    //    std::cout << phi << std::endl;
 
     double cosangleout = TMath::Sqrt(1.-sinangleout*sinangleout);
 
