@@ -1,5 +1,8 @@
-#include "OpticSystemTransport.h"
+#include "Element.h"
 #include "TRandom.h"
+
+#ifndef __CUBE__
+#define __CUBE__
 
 class Cube: public Element {
   private:
@@ -168,3 +171,5 @@ class Cube: public Element {
      return true;
    }
  };
+
+#endif 

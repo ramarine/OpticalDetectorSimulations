@@ -4,21 +4,10 @@
 #include <iostream>
 #include "Ray.h"
 #include "Surface.h"
+#include "Element.h"
 
 #ifndef __OPTICS__
 #define __OPTICS__
-
-class Element {
-
- public:
-  int m_id;
-
-   Element(int id): m_id( id ) {;}
-
-  int getId() const { return m_id; }
-
-
-};
 
 
 class Disc: public Element {
