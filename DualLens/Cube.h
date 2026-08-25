@@ -137,29 +137,34 @@ class Cube: public Element {
  
    bool Transport( Ray &ray ){
 
-      if( ray.GetVZ() < 0.  ) { // backward going tracks 
-	if( !BackSurfaceReflection(ray,-boxsize) )
-	  return false;
-	else 
-	  ray.AddPointTrajectory();
-      }
-	
-      if( !InternalReflection(ray,0.) ) return false;        
-
-      ray.AddPointTrajectory();
 
      double outsideindexrefraction = ray.GetIdxR();
-     if (ray.GetZ() < posz - width/2.){
-       if( ! inputsurface->Transport(ray) ) return false;   // Geometrical Acceptance 
-       if( ! inputsurface->Refraction(ray,indexrefraction) ) return false;  // Check for Refraction probabilities. 
-     } else {
+     if (ray.GetZ() < posz - width/2. ){  // Outside
+       if( ray.GetVZ() > 0. ) { 
+	 if( ! inputsurface->Transport(ray) ) return false;   // Geometrical Acceptance 
+	 if( ! inputsurface->Refraction(ray,indexrefraction) ) return false;  // Check for Refraction probabilities.
+       }
+       else
+	 return false;
+     } else {  // Inside the cube 
        ray.SetIdxR(indexrefraction);
      }
-    
+     
+     if( ray.GetVZ() < 0.  ) { // backward going tracks 
+       if( !BackSurfaceReflection(ray,-boxsize) )
+	 return false;
+       else 
+	 ray.AddPointTrajectory();
+     }
+     
+     if( !InternalReflection(ray,0.) ) return false;        
+     
+     ray.AddPointTrajectory();
+     
      if( ! outputsurface->Transport(ray) ) return false;
      if( ! outputsurface->Refraction(ray,outsideindexrefraction) ) return false;
      ray.AddPointTrajectory();
-
+     
      return true;
    }
  };
