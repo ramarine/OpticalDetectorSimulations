@@ -93,6 +93,8 @@ double Default2Lens(double positionparticle = -50.){
     
     for(int i = 0; i < total; i++ ) {
 
+      std::cout << " -------  " << std::endl;
+      
       double costheta = r.Uniform(0.,1.);
       double phi = r.Uniform(0,2.*3.141592);
       double sintheta = TMath::Sqrt(1.-(costheta*costheta));

@@ -44,13 +44,15 @@ class Ray{
     vzin = vz = vz0/norm;
    }
 
-  void Transport(double znew){
+  bool Transport(double znew){
     double lambda = (znew-z)/vz;
+    if( lambda < 0 ) return false; 
     z = znew;
     x+=lambda*vx;
     y+=lambda*vy;
 
     if( debug == true ) Print("Transport");
+    return true; 
   }
 
   double GetX(void) { return x;}
